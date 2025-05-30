@@ -1,4 +1,11 @@
 import streamlit as st
+# Set page config FIRST before any other Streamlit commands
+st.set_page_config(
+    page_title="🧠 MindBridge - AI Mental Health Platform",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 import pandas as pd
 import numpy as np
 import json
@@ -226,13 +233,6 @@ if 'analyzer' not in st.session_state:
     st.session_state.analyzer = MentalHealthAnalyzer()
 
 def main():
-    st.set_page_config(
-        page_title="🧠 MindBridge - AI Mental Health Platform",
-        page_icon="🧠",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
     # Custom CSS
     st.markdown("""
     <style>
