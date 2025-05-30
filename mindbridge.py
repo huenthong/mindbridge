@@ -3,15 +3,47 @@ import pandas as pd
 import numpy as np
 import json
 import datetime
-from textblob import TextBlob
-import plotly.express as px
-import plotly.graph_objects as go
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
 import re
 import hashlib
 import time
 import random
+
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("Plotly not available. Charts will be disabled.")
+
+# Simple sentiment analysis without TextBlob
+class SimpleSentimentAnalyzer:
+    def __init__(self):
+        self.positive_words = [
+            'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 
+            'happy', 'joy', 'love', 'like', 'enjoy', 'pleased', 'satisfied',
+            'hope', 'optimistic', 'confident', 'grateful', 'thankful', 'blessed'
+        ]
+        
+        self.negative_words = [
+            'bad', 'terrible', 'awful', 'horrible', 'sad', 'angry', 'hate',
+            'dislike', 'upset', 'frustrated', 'disappointed', 'worried',
+            'anxious', 'depressed', 'lonely', 'hopeless', 'worthless'
+        ]
+    
+    def analyze_sentiment(self, text):
+        words = text.lower().split()
+        positive_count = sum(1 for word in words if word in self.positive_words)
+        negative_count = sum(1 for word in words if word in self.negative_words)
+        
+        total_words = len(words)
+        if total_words == 0:
+            return 0.0
+        
+        # Simple scoring: (positive - negative) / total words
+        score = (positive_count - negative_count) / total_words
+        # Normalize to [-1, 1] range
+        return max(-1.0, min(1.0, score * 2))
 
 # Mock EMR Database
 class EMRDatabase:
@@ -113,9 +145,8 @@ class MentalHealthAnalyzer:
     def analyze_text(self, text):
         text_lower = text.lower()
         
-        # Sentiment analysis
-        blob = TextBlob(text)
-        sentiment_score = blob.sentiment.polarity
+        # Sentiment analysis using simple method
+        sentiment_score = self.sentiment_analyzer.analyze_sentiment(text)
         
         # Keyword matching
         depression_count = sum(1 for keyword in self.depression_keywords if keyword in text_lower)
