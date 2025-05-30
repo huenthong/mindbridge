@@ -132,6 +132,9 @@ class EMRDatabase:
 # Mental Health Analysis Engine
 class MentalHealthAnalyzer:
     def __init__(self):
+        # Initialize sentiment analyzer FIRST
+        self.sentiment_analyzer = SimpleSentimentAnalyzer()
+        
         self.depression_keywords = [
             'sad', 'depressed', 'hopeless', 'worthless', 'empty', 'lonely',
             'crying', 'tired', 'fatigue', 'sleep', 'appetite', 'guilty',
