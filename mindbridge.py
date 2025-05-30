@@ -680,7 +680,7 @@ def show_patient_reports():
                 if st.button(f"📄 Download Report {i+1}"):
                     report_data = generate_patient_report(session, patient_data)
                     st.download_button(
-                        label="Download PDF Report",
+                        label="Download Report",
                         data=report_data,
                         file_name=f"mental_health_report_{i+1}.txt",
                         mime="text/plain"
