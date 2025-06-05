@@ -830,55 +830,72 @@ def show_analytics_dashboard():
     
     # Charts
     if all_sessions:
-        col1, col2 = st.columns(2)
+        if PLOTLY_AVAILABLE:
+            col1, col2 = st.columns(2)
         
-        with col1:
-            # Risk level distribution
-            st.subheader("🎯 Risk Level Distribution")
-            risk_df = pd.DataFrame(list(risk_counts.items()), columns=['Risk Level', 'Count'])
-            fig_pie = px.pie(risk_df, values='Count', names='Risk Level', 
-                           color_discrete_map={
-                               'Critical': '#e91e63',
-                               'High': '#f44336', 
-                               'Medium': '#ff9800',
-                               'Low': '#4caf50',
-                               'Not Assessed': '#9e9e9e'
-                           })
-            st.plotly_chart(fig_pie, use_container_width=True)
+            with col1:
+                # Risk level distribution
+                st.subheader("🎯 Risk Level Distribution")
+                risk_df = pd.DataFrame(list(risk_counts.items()), columns=['Risk Level', 'Count'])
+                fig_pie = px.pie(risk_df, values='Count', names='Risk Level', 
+                               color_discrete_map={
+                                   'Critical': '#e91e63',
+                                   'High': '#f44336', 
+                                   'Medium': '#ff9800',
+                                   'Low': '#4caf50',
+                                   'Not Assessed': '#9e9e9e'
+                               })
+                st.plotly_chart(fig_pie, use_container_width=True)
         
-        with col2:
-            # Sentiment distribution
-            st.subheader("😊 Sentiment Score Distribution")
-            sentiment_data = [s['sentiment'] for s in all_sessions]
-            fig_hist = px.histogram(x=sentiment_data, nbins=20, 
-                                  title="Distribution of Sentiment Scores")
-            fig_hist.update_xaxis(title="Sentiment Score")
-            fig_hist.update_yaxis(title="Frequency")
-            st.plotly_chart(fig_hist, use_container_width=True)
+            with col2:
+                # Sentiment distribution
+                st.subheader("😊 Sentiment Score Distribution")
+                sentiment_data = [s['sentiment'] for s in all_sessions]
+                fig_hist = px.histogram(x=sentiment_data, nbins=20, 
+                                      title="Distribution of Sentiment Scores")
+                fig_hist.update_xaxis(title="Sentiment Score")
+                fig_hist.update_yaxis(title="Frequency")
+                st.plotly_chart(fig_hist, use_container_width=True)
         
-        # Time series analysis
-        if len(all_sessions) > 1:
-            st.subheader("📈 Mental Health Trends Over Time")
-            sessions_df = pd.DataFrame(all_sessions)
-            sessions_df['date'] = pd.to_datetime(sessions_df['date'])
-            daily_sentiment = sessions_df.groupby('date')['sentiment'].mean().reset_index()
+            # Time series analysis
+            if len(all_sessions) > 1:
+                st.subheader("📈 Mental Health Trends Over Time")
+                sessions_df = pd.DataFrame(all_sessions)
+                sessions_df['date'] = pd.to_datetime(sessions_df['date'])
+                daily_sentiment = sessions_df.groupby('date')['sentiment'].mean().reset_index()
             
-            fig_line = px.line(daily_sentiment, x='date', y='sentiment',
-                             title="Average Daily Sentiment Score")
-            fig_line.update_xaxis(title="Date")
-            fig_line.update_yaxis(title="Average Sentiment")
-            st.plotly_chart(fig_line, use_container_width=True)
+                fig_line = px.line(daily_sentiment, x='date', y='sentiment',
+                                 title="Average Daily Sentiment Score")
+                fig_line.update_xaxis(title="Date")
+                fig_line.update_yaxis(title="Average Sentiment")
+                st.plotly_chart(fig_line, use_container_width=True)
         
-        # Indicator correlation
-        st.subheader("🔗 Mental Health Indicators")
-        indicators_df = pd.DataFrame(all_sessions)
+            # Indicator correlation
+            st.subheader("🔗 Mental Health Indicators")
+            indicators_df = pd.DataFrame(all_sessions)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            fig_scatter = px.scatter(indicators_df, x='depression_indicators', y='anxiety_indicators',
-                                   color='risk_level', size='sentiment', 
-                                   title="Depression vs Anxiety Indicators")
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                fig_scatter = px.scatter(indicators_df, x='depression_indicators', y='anxiety_indicators',
+                                       color='risk_level', size='sentiment', 
+                                       title="Depression vs Anxiety Indicators")
+                st.plotly_chart(fig_scatter, use_container_width=True)
+        else:
+            # Fallback to basic charts or tables when Plotly is not available
+            st.subheader("📊 Data Summary (Charts unavailable)")
+            col1, col2 = st.columns(2)
+        
+            with col1:
+                st.subheader("🎯 Risk Level Distribution")
+                risk_df = pd.DataFrame(list(risk_counts.items()), columns=['Risk Level', 'Count'])
+                st.dataframe(risk_df)
+        
+            with col2:
+                st.subheader("😊 Sentiment Statistics")
+                sentiment_data = [s['sentiment'] for s in all_sessions]
+                st.write(f"Average Sentiment: {np.mean(sentiment_data):.2f}")
+                st.write(f"Min Sentiment: {min(sentiment_data):.2f}")
+                st.write(f"Max Sentiment: {max(sentiment_data):.2f}")
         
         with col2:
             # Summary statistics
