@@ -995,8 +995,8 @@ def show_doctor_reports():
                 user_messages = [msg['content'] for msg in messages if msg['role'] == 'user']
                 if user_messages:
                     transcript_text = "\n\n".join([f"Patient: {msg}" for msg in user_messages])
-                    st.text_area("Patient Messages", transcript_text, height=200, disabled=True)
-                
+                    st.text_area("Patient Messages", transcript_text, height=200, disabled=True, key=f"transcript_{selected_patient}_{i}")
+
                 # Doctor notes section
                 st.subheader("📝 Clinical Notes")
                 doctor_notes = st.text_area(f"Add clinical notes for session {i+1}:", 
