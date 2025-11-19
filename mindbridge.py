@@ -29,6 +29,9 @@ class GeminiSentimentAnalyzer:
     """Uses Google Gemini AI for sophisticated sentiment analysis"""
     
     def __init__(self):
+        # Always initialize fallback first (in case API fails)
+        self._init_fallback()
+        
         # Get API key from Streamlit secrets
         try:
             self.api_key = st.secrets.get("GEMINI_API_KEY")
@@ -41,7 +44,6 @@ class GeminiSentimentAnalyzer:
         else:
             st.warning("⚠️ AI analysis unavailable. Add GEMINI_API_KEY to Streamlit secrets for smart analysis.")
             self.use_fallback = True
-            self._init_fallback()
     
     def _init_fallback(self):
         """Simple fallback analyzer if no API key"""
