@@ -29,34 +29,23 @@ class GeminiSentimentAnalyzer:
     """Uses Google Gemini AI for sophisticated sentiment analysis"""
     
     def __init__(self):
-        # Always initialize fallback first (in case API fails)
+        # Always initialize fallback first
         self._init_fallback()
 
+        # Hard-coded API key
         self.api_key = "AIzaSyAhcAb3Y2l5zhuE97L45yRmJP9q9lOhQgw"
-
-         # CRITICAL: Must set these variables!
-        if self.api_key:
-            self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
-            self.use_fallback = False
-            print("🔧 TEST MODE: Using hard-coded Gemini API key")
-        else:
-            st.warning("⚠️ AI analysis unavailable.")
-            self.use_fallback = True
-        # Get API key from Streamlit secrets
-        #try:
-            #self.api_key = st.secrets.get("GEMINI_API_KEY")
-        #except:
-            #self.api_key = None
+        self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
+        self.use_fallback = False
         
-        #if self.api_key:
-            #self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
-            #self.use_fallback = False
-        #else:
-            #st.warning("⚠️ AI analysis unavailable. Add GEMINI_API_KEY to Streamlit secrets for smart analysis.")
-            #self.use_fallback = True
+        print("=" * 60)
+        print("🔧 INITIALIZING GEMINI AI")
+        print(f"API Key (first 20): {self.api_key[:20]}...")
+        print(f"API URL: {self.api_url[:80]}...")
+        print(f"use_fallback: {self.use_fallback}")
+        print("=" * 60)
     
     def _init_fallback(self):
-        """Simple fallback analyzer if no API key"""
+        """Simple fallback analyzer"""
         self.positive_words = [
             'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 
             'happy', 'joy', 'love', 'like', 'enjoy', 'pleased', 'satisfied',
@@ -73,66 +62,77 @@ class GeminiSentimentAnalyzer:
         ]
     
     def analyze_sentiment(self, text, conversation_history=None):
-        """Analyze with Gemini AI or fallback to simple method"""
-        if self.use_fallback:
-            return self._simple_analysis(text)
+        """Analyze with Gemini AI or fallback"""
         
+        print("\n" + "=" * 60)
+        print(f"📝 ANALYZING: '{text[:50]}...'")
+        print(f"🔧 use_fallback = {self.use_fallback}")
+        
+        if self.use_fallback:
+            print("⚠️ Using BASIC ANALYSIS")
+            result = self._simple_analysis(text)
+            print(f"✅ Basic result: {result['risk_level']}")
+            return result
+        
+        print("🤖 Attempting GEMINI AI...")
         try:
-            return self._gemini_analysis(text, conversation_history)
+            result = self._gemini_analysis(text, conversation_history)
+            print(f"✅ Gemini result: {result['risk_level']}, Model: {result.get('ai_model')}")
+            return result
         except Exception as e:
-            print(f"Gemini AI error: {e}")
-            return self._simple_analysis(text)
+            print(f"❌ GEMINI FAILED: {str(e)[:200]}")
+            print("⚠️ Falling back to basic analysis")
+            result = self._simple_analysis(text)
+            return result
     
     def _gemini_analysis(self, text, conversation_history=None):
-        """Use Gemini AI for sophisticated analysis"""
-        # Build context from conversation history
+        """Use Gemini AI"""
         context = ""
         if conversation_history:
-            recent = conversation_history[-5:]  # Last 5 messages
+            recent = conversation_history[-5:]
             context = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
         
-        prompt = f"""You are a clinical mental health AI analyzer. Analyze this patient message for mental health indicators.
+        prompt = f"""You are a clinical mental health AI analyzer. Analyze this patient message.
 
-{f"Previous conversation context:\n{context}\n" if context else ""}
+{f"Previous conversation:\n{context}\n" if context else ""}
 
-Current patient message: "{text}"
+Current message: "{text}"
 
-Analyze and return ONLY valid JSON (no markdown, no explanation):
+Return ONLY valid JSON:
 {{
-    "sentiment_score": <float between -1.0 (very negative) and 1.0 (very positive)>,
-    "is_sarcastic": <true or false>,
-    "true_emotion": "<actual emotion if sarcastic, or 'none' if not>",
-    "depression_indicators": <integer count 0-10>,
-    "anxiety_indicators": <integer count 0-10>,
-    "crisis_indicators": <integer count 0-5>,
-    "risk_level": "<Critical or High or Medium or Low>",
-    "emotional_state": "<brief 5-10 word description>",
-    "key_concerns": ["<concern1>", "<concern2>"],
-    "confidence": <float between 0.0 and 1.0>
+    "sentiment_score": <-1.0 to 1.0>,
+    "is_sarcastic": <true/false>,
+    "true_emotion": "<emotion>",
+    "depression_indicators": <0-10>,
+    "anxiety_indicators": <0-10>,
+    "crisis_indicators": <0-5>,
+    "risk_level": "<Critical/High/Medium/Low>",
+    "emotional_state": "<brief description>",
+    "key_concerns": [<list>],
+    "confidence": <0.0-1.0>
 }}
 
-CRITICAL: Detect sarcasm ("I'm fine" when struggling), minimization, hidden emotions, and consider conversation context."""
+Detect sarcasm, minimization, hidden emotions."""
 
         data = {
-            "contents": [{
-                "parts": [{"text": prompt}]
-            }],
-            "generationConfig": {
-                "temperature": 0.3,
-                "maxOutputTokens": 1024
-            }
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024}
         }
         
+        print(f"📡 Calling: {self.api_url[:60]}...")
         response = requests.post(self.api_url, json=data, timeout=30)
-        response.raise_for_status()
+        print(f"📡 Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"❌ Error response: {response.text[:500]}")
+            raise Exception(f"API returned {response.status_code}")
         
         result = response.json()
         content = result['candidates'][0]['content']['parts'][0]['text']
+        print(f"📡 Received: {content[:150]}...")
         
-        # Clean up response
+        # Clean and parse
         content = content.replace('```json', '').replace('```', '').strip()
-        
-        # Extract JSON if embedded in text
         json_match = re.search(r'\{.*\}', content, re.DOTALL)
         if json_match:
             content = json_match.group()
@@ -144,7 +144,7 @@ CRITICAL: Detect sarcasm ("I'm fine" when struggling), minimization, hidden emot
         return analysis
     
     def _simple_analysis(self, text):
-        """Fallback simple analysis"""
+        """Fallback"""
         words = text.lower().split()
         positive = sum(1 for w in words if w.strip('.,!?') in self.positive_words)
         negative = sum(1 for w in words if w.strip('.,!?') in self.negative_words)
@@ -162,7 +162,7 @@ CRITICAL: Detect sarcasm ("I'm fine" when struggling), minimization, hidden emot
             "anxiety_indicators": negative,
             "crisis_indicators": 0,
             "risk_level": "Medium" if negative > 2 else "Low",
-            "emotional_state": "Basic analysis mode (AI unavailable)",
+            "emotional_state": "Basic analysis mode",
             "key_concerns": [],
             "confidence": 0.5,
             "analysis_timestamp": datetime.datetime.now().isoformat(),
