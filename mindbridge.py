@@ -144,7 +144,7 @@ class MentalHealthAnalyzer:
         self.anxiety_keywords = [
             'worried', 'anxious', 'nervous', 'panic', 'fear', 'scared',
             'restless', 'tense', 'stress', 'overwhelm', 'racing thoughts',
-            'heart racing', 'sweating', 'trembling', 'avoid', 'escape'
+            'heart racing', 'sweating', 'trembling', 'avoid', 'escape', 'anxiety'
         ]
         
         self.crisis_keywords = [
