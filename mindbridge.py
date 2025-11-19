@@ -14,6 +14,7 @@ import re
 import hashlib
 import time
 import random
+import requests
 
 try:
     import plotly.express as px
@@ -23,34 +24,138 @@ except ImportError:
     PLOTLY_AVAILABLE = False
     st.warning("Plotly not available. Charts will be disabled.")
 
-# Simple sentiment analysis without TextBlob
-class SimpleSentimentAnalyzer:
+# Gemini AI-Enhanced Sentiment Analysis
+class GeminiSentimentAnalyzer:
+    """Uses Google Gemini AI for sophisticated sentiment analysis"""
+    
     def __init__(self):
+        # Get API key from Streamlit secrets
+        try:
+            self.api_key = st.secrets.get("GEMINI_API_KEY")
+        except:
+            self.api_key = None
+        
+        if self.api_key:
+            self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
+            self.use_fallback = False
+        else:
+            st.warning("⚠️ AI analysis unavailable. Add GEMINI_API_KEY to Streamlit secrets for smart analysis.")
+            self.use_fallback = True
+            self._init_fallback()
+    
+    def _init_fallback(self):
+        """Simple fallback analyzer if no API key"""
         self.positive_words = [
             'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 
             'happy', 'joy', 'love', 'like', 'enjoy', 'pleased', 'satisfied',
-            'hope', 'optimistic', 'confident', 'grateful', 'thankful', 'blessed'
+            'hope', 'optimistic', 'confident', 'grateful', 'thankful', 'blessed',
+            'better', 'improving', 'positive', 'calm', 'relaxed'
         ]
         
         self.negative_words = [
             'bad', 'terrible', 'awful', 'horrible', 'sad', 'angry', 'hate',
             'dislike', 'upset', 'frustrated', 'disappointed', 'worried',
-            'anxious', 'depressed', 'lonely', 'hopeless', 'worthless'
+            'anxious', 'anxiety', 'depressed', 'depression', 'lonely', 'hopeless', 
+            'worthless', 'stress', 'stressed', 'overwhelmed', 'exhausted', 'nervous',
+            'scared', 'fear', 'panic', 'crying', 'tired'
         ]
     
-    def analyze_sentiment(self, text):
+    def analyze_sentiment(self, text, conversation_history=None):
+        """Analyze with Gemini AI or fallback to simple method"""
+        if self.use_fallback:
+            return self._simple_analysis(text)
+        
+        try:
+            return self._gemini_analysis(text, conversation_history)
+        except Exception as e:
+            print(f"Gemini AI error: {e}")
+            return self._simple_analysis(text)
+    
+    def _gemini_analysis(self, text, conversation_history=None):
+        """Use Gemini AI for sophisticated analysis"""
+        # Build context from conversation history
+        context = ""
+        if conversation_history:
+            recent = conversation_history[-5:]  # Last 5 messages
+            context = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
+        
+        prompt = f"""You are a clinical mental health AI analyzer. Analyze this patient message for mental health indicators.
+
+{f"Previous conversation context:\n{context}\n" if context else ""}
+
+Current patient message: "{text}"
+
+Analyze and return ONLY valid JSON (no markdown, no explanation):
+{{
+    "sentiment_score": <float between -1.0 (very negative) and 1.0 (very positive)>,
+    "is_sarcastic": <true or false>,
+    "true_emotion": "<actual emotion if sarcastic, or 'none' if not>",
+    "depression_indicators": <integer count 0-10>,
+    "anxiety_indicators": <integer count 0-10>,
+    "crisis_indicators": <integer count 0-5>,
+    "risk_level": "<Critical or High or Medium or Low>",
+    "emotional_state": "<brief 5-10 word description>",
+    "key_concerns": ["<concern1>", "<concern2>"],
+    "confidence": <float between 0.0 and 1.0>
+}}
+
+CRITICAL: Detect sarcasm ("I'm fine" when struggling), minimization, hidden emotions, and consider conversation context."""
+
+        data = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1024
+            }
+        }
+        
+        response = requests.post(self.api_url, json=data, timeout=30)
+        response.raise_for_status()
+        
+        result = response.json()
+        content = result['candidates'][0]['content']['parts'][0]['text']
+        
+        # Clean up response
+        content = content.replace('```json', '').replace('```', '').strip()
+        
+        # Extract JSON if embedded in text
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            content = json_match.group()
+        
+        analysis = json.loads(content)
+        analysis['analysis_timestamp'] = datetime.datetime.now().isoformat()
+        analysis['ai_model'] = 'gemini-pro'
+        
+        return analysis
+    
+    def _simple_analysis(self, text):
+        """Fallback simple analysis"""
         words = text.lower().split()
-        positive_count = sum(1 for word in words if word in self.positive_words)
-        negative_count = sum(1 for word in words if word in self.negative_words)
+        positive = sum(1 for w in words if w.strip('.,!?') in self.positive_words)
+        negative = sum(1 for w in words if w.strip('.,!?') in self.negative_words)
         
-        total_words = len(words)
-        if total_words == 0:
-            return 0.0
+        score = 0
+        if len(words) > 0:
+            score = (positive - negative) / len(words) * 2
+            score = max(-1.0, min(1.0, score))
         
-        # Simple scoring: (positive - negative) / total words
-        score = (positive_count - negative_count) / total_words
-        # Normalize to [-1, 1] range
-        return max(-1.0, min(1.0, score * 2))
+        return {
+            "sentiment_score": score,
+            "is_sarcastic": False,
+            "true_emotion": "unknown",
+            "depression_indicators": negative,
+            "anxiety_indicators": negative,
+            "crisis_indicators": 0,
+            "risk_level": "Medium" if negative > 2 else "Low",
+            "emotional_state": "Basic analysis mode (AI unavailable)",
+            "key_concerns": [],
+            "confidence": 0.5,
+            "analysis_timestamp": datetime.datetime.now().isoformat(),
+            "ai_model": "simple-fallback"
+        }
 
 # Mock EMR Database
 class EMRDatabase:
@@ -129,105 +234,126 @@ class EMRDatabase:
                 self.patients[ic_number]['chat_sessions'] = []
             self.patients[ic_number]['chat_sessions'].append(session_data)
 
-# Mental Health Analysis Engine
+# Mental Health Analysis Engine with Gemini AI
 class MentalHealthAnalyzer:
     def __init__(self):
-        # Initialize sentiment analyzer FIRST
-        self.sentiment_analyzer = SimpleSentimentAnalyzer()
+        self.sentiment_analyzer = GeminiSentimentAnalyzer()
         
-        self.depression_keywords = [
-            'sad', 'sadness', 'depressed', 'depression', 'hopeless', 'worthless', 'empty', 'lonely',
-            'crying', 'cry', 'tired', 'fatigue', 'exhausted', 'sleep', 'insomnia', 'appetite', 'guilty', 'guilt',
-            'death', 'die', 'suicide', 'suicidal', 'ending', 'give up', 'no point', 'burden', 'numb', 'meaningless'
-        ]
-        
-        self.anxiety_keywords = [
-            'worried', 'anxious', 'nervous', 'panic', 'fear', 'scared',
-            'restless', 'tense', 'stress', 'overwhelm', 'racing thoughts',
-            'heart racing', 'sweating', 'trembling', 'avoid', 'escape', 'anxiety'
-        ]
-        
+        # Crisis keywords for safety override
         self.crisis_keywords = [
-            'suicide', 'kill myself', 'end it all', 'die', 'death wish',
-            'no reason to live', 'better off dead', 'harm myself'
+            'suicide', 'suicidal', 'kill myself', 'end it all', 'die', 'dying',
+            'death wish', 'no reason to live', 'better off dead', 'harm myself',
+            'hurt myself', 'end my life', 'want to die', 'cant go on'
         ]
     
-    def analyze_text(self, text):
+    def analyze_text(self, text, conversation_history=None):
+        """Analyze text using Gemini AI with conversation context"""
+        # Get AI analysis
+        analysis = self.sentiment_analyzer.analyze_sentiment(text, conversation_history)
+        
+        # Crisis keyword safety override
         text_lower = text.lower()
-        
-        # Sentiment analysis using simple method
-        sentiment_score = self.sentiment_analyzer.analyze_sentiment(text)
-        
-        # Keyword matching
-        depression_count = sum(1 for keyword in self.depression_keywords if keyword in text_lower)
-        anxiety_count = sum(1 for keyword in self.anxiety_keywords if keyword in text_lower)
         crisis_count = sum(1 for keyword in self.crisis_keywords if keyword in text_lower)
         
-        # Risk assessment
-        risk_level = "Low"
         if crisis_count > 0:
-            risk_level = "Critical"
-        elif depression_count >= 3 or anxiety_count >= 3 or sentiment_score < -0.5:
-            risk_level = "High"
-        elif depression_count >= 1 or anxiety_count >= 1 or sentiment_score < -0.2:
-            risk_level = "Medium"
+            analysis['risk_level'] = "Critical"
+            analysis['crisis_indicators'] = max(analysis.get('crisis_indicators', 0), crisis_count)
+            if 'key_concerns' not in analysis:
+                analysis['key_concerns'] = []
+            analysis['key_concerns'].insert(0, "CRISIS KEYWORDS DETECTED - IMMEDIATE INTERVENTION REQUIRED")
         
-        return {
-            "sentiment_score": sentiment_score,
-            "depression_indicators": depression_count,
-            "anxiety_indicators": anxiety_count,
-            "crisis_indicators": crisis_count,
-            "risk_level": risk_level,
-            "analysis_timestamp": datetime.datetime.now().isoformat()
-        }
+        return analysis
     
     def generate_recommendations(self, analysis_result, patient_history=None):
-        risk_level = analysis_result["risk_level"]
+        """Generate contextual recommendations based on AI analysis"""
+        risk_level = analysis_result.get("risk_level", "Low")
+        emotional_state = analysis_result.get("emotional_state", "")
+        key_concerns = analysis_result.get("key_concerns", [])
+        is_sarcastic = analysis_result.get("is_sarcastic", False)
         
+        recommendations = {
+            "immediate_action": "",
+            "recommendations": [],
+            "follow_up": "",
+            "additional_notes": []
+        }
+        
+        # Add note if sarcasm detected
+        if is_sarcastic:
+            true_emotion = analysis_result.get('true_emotion', 'unknown')
+            recommendations["additional_notes"].append(
+                f"⚠️ Sarcasm/Masking Detected: Patient may be hiding true feelings. True emotion: {true_emotion}"
+            )
+        
+        # Add AI confidence note
+        confidence = analysis_result.get('confidence', 0)
+        if confidence > 0 and confidence < 0.6:
+            recommendations["additional_notes"].append(
+                f"ℹ️ AI Confidence: {confidence:.0%} - Consider additional clinical assessment"
+            )
+        
+        # Add key concerns
+        if key_concerns:
+            concerns_text = ", ".join(key_concerns[:3])
+            recommendations["additional_notes"].append(f"🎯 Primary concerns: {concerns_text}")
+        
+        # Add emotional state
+        if emotional_state and "Basic analysis" not in emotional_state:
+            recommendations["additional_notes"].append(f"😔 Emotional state: {emotional_state}")
+        
+        # Risk-based recommendations
         if risk_level == "Critical":
-            return {
-                "immediate_action": "EMERGENCY REFERRAL REQUIRED",
+            recommendations.update({
+                "immediate_action": "🚨 EMERGENCY - IMMEDIATE INTERVENTION REQUIRED",
                 "recommendations": [
-                    "Immediate psychiatric evaluation needed",
-                    "Consider emergency department referral",
-                    "Implement safety planning",
-                    "Contact emergency services if imminent danger"
+                    "Contact emergency services (999) immediately if imminent danger",
+                    "Activate crisis response team NOW",
+                    "Do NOT leave patient alone",
+                    "Immediate psychiatric evaluation required within 1 hour",
+                    "Implement safety planning protocol",
+                    "Contact patient's emergency contact immediately"
                 ],
-                "follow_up": "Within 24 hours"
-            }
+                "follow_up": "Continuous monitoring - within 1 hour"
+            })
         elif risk_level == "High":
-            return {
-                "immediate_action": "Urgent mental health referral",
+            recommendations.update({
+                "immediate_action": "⚠️ URGENT - Mental health referral needed within 24-48 hours",
                 "recommendations": [
-                    "Schedule psychiatrist consultation within 1 week",
-                    "Consider counseling/therapy referral",
-                    "Review current medications",
-                    "Implement regular check-ins"
+                    "Schedule urgent psychiatrist consultation within 48 hours",
+                    "Consider immediate counseling/therapy referral",
+                    "Review and adjust current medications if applicable",
+                    "Implement daily check-ins (phone or in-person)",
+                    "Provide crisis hotline numbers: Befrienders 03-76272929",
+                    "Assess support system availability"
                 ],
-                "follow_up": "Within 1 week"
-            }
+                "follow_up": "Within 24-48 hours, then every 2-3 days"
+            })
         elif risk_level == "Medium":
-            return {
-                "immediate_action": "Monitor and support",
+            recommendations.update({
+                "immediate_action": "📋 Schedule follow-up appointment within 1-2 weeks",
                 "recommendations": [
-                    "Schedule follow-up appointment",
-                    "Consider counseling referral",
-                    "Lifestyle modifications discussion",
-                    "Stress management techniques"
+                    "Consider counseling or therapy referral",
+                    "Discuss lifestyle modifications (sleep, exercise, diet)",
+                    "Introduce stress management techniques",
+                    "Evaluate sleep patterns and quality",
+                    "Weekly check-ins via phone or video chat"
                 ],
-                "follow_up": "Within 2-4 weeks"
-            }
-        else:
-            return {
-                "immediate_action": "Continue monitoring",
+                "follow_up": "Within 1-2 weeks"
+            })
+        else:  # Low risk
+            recommendations.update({
+                "immediate_action": "✅ Continue supportive care and monitoring",
                 "recommendations": [
                     "Maintain regular check-ups",
-                    "Encourage healthy lifestyle",
-                    "Preventive mental health education",
-                    "Open communication channels"
+                    "Encourage healthy lifestyle habits",
+                    "Provide mental health education resources",
+                    "Keep communication channels open",
+                    "Preventive mental wellness strategies"
                 ],
                 "follow_up": "Regular scheduled visits"
-            }
+            })
+        
+        return recommendations
 
 # Initialize global objects
 if 'emr_db' not in st.session_state:
@@ -511,8 +637,14 @@ def show_chat_interface():
                 # Add user message
                 st.session_state.chat_messages.append({"role": "user", "content": user_input})
                 
-                # Analyze message
-                analysis = st.session_state.analyzer.analyze_text(user_input)
+                # Pass conversation history for AI context
+                conversation_history = [
+                    {"role": msg["role"], "content": msg["content"]} 
+                    for msg in st.session_state.chat_messages
+                ]
+                
+                # Analyze message with AI
+                analysis = st.session_state.analyzer.analyze_text(user_input, conversation_history)
                 
                 # Generate AI response
                 ai_response = generate_ai_response(user_input, analysis)
@@ -535,15 +667,21 @@ def show_chat_interface():
             ]
             st.rerun()
     
-    # Real-time analysis sidebar
+    # Real-time analysis sidebar with Gemini AI insights
     if len(st.session_state.chat_messages) > 1:
-        st.sidebar.subheader("📊 Real-time Analysis")
+        st.sidebar.subheader("📊 Real-time AI Analysis")
         
         # Analyze all user messages
         user_messages = [msg["content"] for msg in st.session_state.chat_messages if msg["role"] == "user"]
         if user_messages:
             combined_text = " ".join(user_messages)
-            analysis = st.session_state.analyzer.analyze_text(combined_text)
+            
+            # Pass full conversation history
+            conversation_history = [
+                {"role": msg["role"], "content": msg["content"]} 
+                for msg in st.session_state.chat_messages
+            ]
+            analysis = st.session_state.analyzer.analyze_text(combined_text, conversation_history)
             
             # Risk level indicator
             risk_level = analysis["risk_level"]
@@ -560,6 +698,32 @@ def show_chat_interface():
             st.sidebar.metric("Sentiment Score", f"{analysis['sentiment_score']:.2f}")
             st.sidebar.metric("Depression Indicators", analysis['depression_indicators'])
             st.sidebar.metric("Anxiety Indicators", analysis['anxiety_indicators'])
+            
+            # Gemini AI Insights
+            if analysis.get('is_sarcastic'):
+                st.sidebar.warning(f"⚠️ Sarcasm detected: {analysis.get('true_emotion', 'unknown')}")
+            
+            emotional_state = analysis.get('emotional_state', '')
+            if emotional_state and 'Basic analysis' not in emotional_state:
+                st.sidebar.write("**😔 Emotional State:**")
+                st.sidebar.write(emotional_state)
+            
+            confidence = analysis.get('confidence', 0)
+            if confidence > 0:
+                st.sidebar.metric("🎯 AI Confidence", f"{confidence:.0%}")
+            
+            key_concerns = analysis.get('key_concerns', [])
+            if key_concerns:
+                st.sidebar.write("**⚠️ Key Concerns:**")
+                for concern in key_concerns:
+                    st.sidebar.write(f"  • {concern}")
+            
+            # Show AI model being used
+            ai_model = analysis.get('ai_model', 'unknown')
+            if ai_model == 'gemini-pro':
+                st.sidebar.success("✨ Powered by Gemini AI")
+            elif ai_model == 'simple-fallback':
+                st.sidebar.info("ℹ️ Using basic analysis")
 
 def generate_ai_response(user_input, analysis):
     """Generate contextual AI responses based on user input and analysis"""
@@ -667,6 +831,15 @@ def show_patient_reports():
                     st.metric("Depression Indicators", analysis.get('depression_indicators', 0))
                     st.metric("Anxiety Indicators", analysis.get('anxiety_indicators', 0))
                 
+                # Show AI insights if available
+                if analysis.get('is_sarcastic'):
+                    st.warning(f"⚠️ Note: Sarcasm detected in communication. True emotion: {analysis.get('true_emotion')}")
+                
+                if analysis.get('key_concerns'):
+                    st.write("**Key Concerns Identified:**")
+                    for concern in analysis['key_concerns']:
+                        st.write(f"• {concern}")
+                
                 # Recommendations
                 recommendations = st.session_state.analyzer.generate_recommendations(analysis)
                 st.subheader("💡 Recommendations")
@@ -675,6 +848,11 @@ def show_patient_reports():
                 for rec in recommendations['recommendations']:
                     st.write(f"- {rec}")
                 st.write(f"**Follow-up:** {recommendations['follow_up']}")
+                
+                if recommendations.get('additional_notes'):
+                    st.write("**Additional Notes:**")
+                    for note in recommendations['additional_notes']:
+                        st.info(note)
                 
                 # Download report
                 if st.button(f"📄 Download Report {i+1}"):
@@ -787,6 +965,15 @@ def show_doctor_patient_list():
                 st.metric("Depression Signs", analysis.get('depression_indicators', 0))
             with col4:
                 st.metric("Anxiety Signs", analysis.get('anxiety_indicators', 0))
+            
+            # Show AI insights
+            if analysis.get('is_sarcastic'):
+                st.warning(f"⚠️ Sarcasm detected in latest session: {analysis.get('true_emotion')}")
+            
+            if analysis.get('key_concerns'):
+                st.write("**AI-Identified Concerns:**")
+                for concern in analysis['key_concerns']:
+                    st.write(f"• {concern}")
 
 def show_analytics_dashboard():
     st.title("📊 Mental Health Analytics Dashboard")
@@ -880,6 +1067,22 @@ def show_analytics_dashboard():
                                        color='risk_level', size='sentiment', 
                                        title="Depression vs Anxiety Indicators")
                 st.plotly_chart(fig_scatter, use_container_width=True)
+            
+            with col2:
+                # Summary statistics
+                st.subheader("📋 Summary Statistics")
+                st.write("**Depression Indicators:**")
+                st.write(f"- Average: {np.mean([s['depression_indicators'] for s in all_sessions]):.1f}")
+                st.write(f"- Max: {max([s['depression_indicators'] for s in all_sessions])}")
+                
+                st.write("**Anxiety Indicators:**")
+                st.write(f"- Average: {np.mean([s['anxiety_indicators'] for s in all_sessions]):.1f}")
+                st.write(f"- Max: {max([s['anxiety_indicators'] for s in all_sessions])}")
+                
+                st.write("**Sentiment Scores:**")
+                sentiments = [s['sentiment'] for s in all_sessions]
+                st.write(f"- Average: {np.mean(sentiments):.2f}")
+                st.write(f"- Range: {min(sentiments):.2f} to {max(sentiments):.2f}")
         else:
             # Fallback to basic charts or tables when Plotly is not available
             st.subheader("📊 Data Summary (Charts unavailable)")
@@ -896,22 +1099,6 @@ def show_analytics_dashboard():
                 st.write(f"Average Sentiment: {np.mean(sentiment_data):.2f}")
                 st.write(f"Min Sentiment: {min(sentiment_data):.2f}")
                 st.write(f"Max Sentiment: {max(sentiment_data):.2f}")
-        
-        with col2:
-            # Summary statistics
-            st.subheader("📋 Summary Statistics")
-            st.write("**Depression Indicators:**")
-            st.write(f"- Average: {np.mean([s['depression_indicators'] for s in all_sessions]):.1f}")
-            st.write(f"- Max: {max([s['depression_indicators'] for s in all_sessions])}")
-            
-            st.write("**Anxiety Indicators:**")
-            st.write(f"- Average: {np.mean([s['anxiety_indicators'] for s in all_sessions]):.1f}")
-            st.write(f"- Max: {max([s['anxiety_indicators'] for s in all_sessions])}")
-            
-            st.write("**Sentiment Scores:**")
-            sentiments = [s['sentiment'] for s in all_sessions]
-            st.write(f"- Average: {np.mean(sentiments):.2f}")
-            st.write(f"- Range: {min(sentiments):.2f} to {max(sentiments):.2f}")
     
     else:
         st.info("No chat session data available for analytics. Patients need to complete chat sessions first.")
@@ -979,6 +1166,14 @@ def show_doctor_reports():
                     st.metric("Anxiety Indicators", analysis.get('anxiety_indicators', 0))
                     if analysis.get('crisis_indicators', 0) > 0:
                         st.error(f"⚠️ Crisis Keywords Detected: {analysis.get('crisis_indicators', 0)}")
+                    
+                    # AI insights
+                    if analysis.get('is_sarcastic'):
+                        st.warning(f"⚠️ Sarcasm Detected: {analysis.get('true_emotion')}")
+                    
+                    confidence = analysis.get('confidence', 0)
+                    if confidence > 0:
+                        st.info(f"AI Confidence: {confidence:.0%}")
                 
                 with col2:
                     st.subheader("💡 Clinical Recommendations")
@@ -989,6 +1184,18 @@ def show_doctor_reports():
                     for rec in recommendations['recommendations']:
                         st.write(f"• {rec}")
                     st.write(f"**Follow-up Timeline:** {recommendations['follow_up']}")
+                    
+                    if recommendations.get('additional_notes'):
+                        st.write("**Additional Notes:**")
+                        for note in recommendations['additional_notes']:
+                            st.info(note)
+                
+                # Show key concerns if available
+                key_concerns = analysis.get('key_concerns', [])
+                if key_concerns:
+                    st.subheader("🎯 AI-Identified Concerns")
+                    for concern in key_concerns:
+                        st.write(f"• {concern}")
                 
                 # Chat transcript
                 st.subheader("💬 Session Transcript")
@@ -1037,7 +1244,21 @@ Risk Level: {analysis.get('risk_level', 'Unknown')}
 Sentiment Score: {analysis.get('sentiment_score', 0):.2f}
 Depression Indicators: {analysis.get('depression_indicators', 0)}
 Anxiety Indicators: {analysis.get('anxiety_indicators', 0)}
+AI Confidence: {analysis.get('confidence', 0):.0%}
+"""
 
+    if analysis.get('is_sarcastic'):
+        report += f"\nNote: Communication style detected - True emotion: {analysis.get('true_emotion')}\n"
+    
+    if analysis.get('emotional_state'):
+        report += f"Emotional State: {analysis.get('emotional_state')}\n"
+    
+    if analysis.get('key_concerns'):
+        report += "\nKey Concerns Identified:\n"
+        for concern in analysis['key_concerns']:
+            report += f"- {concern}\n"
+    
+    report += """
 RECOMMENDATIONS
 ---------------
 """
@@ -1049,6 +1270,11 @@ RECOMMENDATIONS
         report += f"{i}. {rec}\n"
     
     report += f"\nFollow-up Timeline: {recommendations['follow_up']}\n"
+    
+    if recommendations.get('additional_notes'):
+        report += "\nAdditional Notes:\n"
+        for note in recommendations['additional_notes']:
+            report += f"- {note}\n"
     
     report += """
 IMPORTANT NOTES
@@ -1063,6 +1289,7 @@ PRIVACY NOTICE
 This report contains confidential medical information. Keep it secure and only share with authorized healthcare providers.
 
 Generated by MindBridge AI Mental Health Platform
+Powered by Gemini AI
 """
     
     return report
@@ -1081,7 +1308,6 @@ COMPREHENSIVE MENTAL HEALTH ASSESSMENT REPORT
 PATIENT INFORMATION
 -------------------
 Name: {patient_data['name']}
-IC Number: {patient_data.get('ic_number', 'N/A')}
 Age: {patient_data['age']}
 Gender: {patient_data['gender']}
 Assessment Date: {timestamp[:10]}
@@ -1106,13 +1332,29 @@ Current Medications:
     
     report += f"""
 
-AI ANALYSIS RESULTS
--------------------
+AI ANALYSIS RESULTS (Powered by Gemini AI)
+-------------------------------------------
 Overall Risk Assessment: {analysis.get('risk_level', 'Unknown')}
 Sentiment Analysis Score: {analysis.get('sentiment_score', 0):.3f}
 Depression Risk Indicators: {analysis.get('depression_indicators', 0)}
 Anxiety Risk Indicators: {analysis.get('anxiety_indicators', 0)}
 Crisis Risk Indicators: {analysis.get('crisis_indicators', 0)}
+AI Confidence Level: {analysis.get('confidence', 0):.0%}
+"""
+
+    if analysis.get('is_sarcastic'):
+        report += f"\n⚠️ SARCASM DETECTED: Patient may be masking true emotions\n"
+        report += f"True Emotional State: {analysis.get('true_emotion', 'Unknown')}\n"
+    
+    if analysis.get('emotional_state'):
+        report += f"\nEmotional State Assessment: {analysis.get('emotional_state')}\n"
+    
+    if analysis.get('key_concerns'):
+        report += "\nAI-Identified Key Concerns:\n"
+        for concern in analysis['key_concerns']:
+            report += f"• {concern}\n"
+    
+    report += """
 
 RISK INTERPRETATION
 -------------------
@@ -1144,6 +1386,11 @@ Recommended Interventions:
         report += f"{i}. {rec}\n"
     
     report += f"\nFollow-up Timeline: {recommendations['follow_up']}\n"
+    
+    if recommendations.get('additional_notes'):
+        report += "\nAdditional Clinical Notes:\n"
+        for note in recommendations['additional_notes']:
+            report += f"• {note}\n"
     
     # Patient communication analysis
     user_messages = [msg['content'] for msg in messages if msg['role'] == 'user']
@@ -1192,9 +1439,10 @@ CLINICAL NOTES
 
 TECHNICAL DETAILS
 -----------------
-Analysis Engine: MindBridge AI v1.0
-Assessment Method: Natural Language Processing + Sentiment Analysis
-Confidence Level: {'High' if len(user_messages) > 3 else 'Moderate'}
+Analysis Engine: MindBridge AI v2.0 with Gemini Pro
+Assessment Method: Natural Language Processing + AI Sentiment Analysis
+AI Model: {analysis.get('ai_model', 'Unknown')}
+Confidence Level: {analysis.get('confidence', 0):.0%}
 Data Quality: {'Good' if len(user_messages) > 2 else 'Limited'}
 
 DISCLAIMER
@@ -1210,8 +1458,8 @@ Distribution should be limited to personnel directly involved in patient care.
 Ensure compliance with local privacy and data protection regulations.
 
 Report Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-Generated by: MindBridge AI Mental Health Platform
-Version: 1.0 (Prototype)
+Generated by: MindBridge AI Mental Health Platform v2.0
+Powered by: Google Gemini AI
 """
     
     return report
