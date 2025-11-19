@@ -136,9 +136,9 @@ class MentalHealthAnalyzer:
         self.sentiment_analyzer = SimpleSentimentAnalyzer()
         
         self.depression_keywords = [
-            'sad', 'depressed', 'hopeless', 'worthless', 'empty', 'lonely',
-            'crying', 'tired', 'fatigue', 'sleep', 'appetite', 'guilty',
-            'death', 'suicide', 'ending', 'give up', 'no point', 'burden'
+            'sad', 'sadness', 'depressed', 'depression', 'hopeless', 'worthless', 'empty', 'lonely',
+            'crying', 'cry', 'tired', 'fatigue', 'exhausted', 'sleep', 'insomnia', 'appetite', 'guilty', 'guilt',
+            'death', 'die', 'suicide', 'suicidal', 'ending', 'give up', 'no point', 'burden', 'numb', 'meaningless'
         ]
         
         self.anxiety_keywords = [
