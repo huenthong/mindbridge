@@ -33,7 +33,15 @@ class GeminiSentimentAnalyzer:
         self._init_fallback()
 
         self.api_key = "AIzaSyAhcAb3Y2l5zhuE97L45yRmJP9q9lOhQgw"
-        print("🔧 TEST MODE: Using hard-coded API key")
+
+         # CRITICAL: Must set these variables!
+        if self.api_key:
+            self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
+            self.use_fallback = False
+            print("🔧 TEST MODE: Using hard-coded Gemini API key")
+        else:
+            st.warning("⚠️ AI analysis unavailable.")
+            self.use_fallback = True
         # Get API key from Streamlit secrets
         #try:
             #self.api_key = st.secrets.get("GEMINI_API_KEY")
