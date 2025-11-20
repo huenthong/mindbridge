@@ -671,7 +671,10 @@ def show_chat_interface():
     if "message_input" not in st.session_state:
         st.session_state.message_input = ""
     
-    user_input = st.text_area("Type your message here...", value=st.session_state.message_input, height=100, key="chat_input")
+    # Use session state without key to allow proper clearing
+    user_input = st.text_area("Type your message here...", 
+                              value=st.session_state.message_input, 
+                              height=100)
     
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
@@ -1102,11 +1105,7 @@ def show_analytics_dashboard():
                 sessions_df = pd.DataFrame(all_sessions)
                 sessions_df['date'] = pd.to_datetime(sessions_df['date'])
                 daily_sentiment = sessions_df.groupby('date')['sentiment'].mean().reset_index()
-            
-                fig_line = px.line(daily_sentiment, x='date', y='sentiment',
                                  title="Average Daily Sentiment Score")
-                fig_line.update_xaxis(title="Date")
-                fig_line.update_yaxis(title="Average Sentiment")
                 st.plotly_chart(fig_line, use_container_width=True)
         
             # Indicator correlation
