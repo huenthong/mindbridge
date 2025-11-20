@@ -667,7 +667,11 @@ def show_chat_interface():
                 st.markdown(f'<div class="chat-message bot-message"><strong>AI Assistant:</strong> {message["content"]}</div>', unsafe_allow_html=True)
     
     # Chat input
-    user_input = st.text_area("Type your message here...", height=100, key="chat_input")
+    # Initialize text input in session state
+    if "message_input" not in st.session_state:
+        st.session_state.message_input = ""
+    
+    user_input = st.text_area("Type your message here...", value=st.session_state.message_input, height=100, key="chat_input")
     
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
@@ -696,6 +700,9 @@ def show_chat_interface():
                     "analysis": analysis
                 }
                 st.session_state.emr_db.add_session_record(st.session_state.current_patient, session_data)
+                
+                # Clear the message input
+                st.session_state.message_input = ""
                 
                 st.rerun()
     
@@ -1085,10 +1092,8 @@ def show_analytics_dashboard():
                 # Sentiment distribution
                 st.subheader("😊 Sentiment Score Distribution")
                 sentiment_data = [s['sentiment'] for s in all_sessions]
-                fig_hist = px.histogram(sentiment_data, nbins=20, 
+                fig_hist = px.histogram(x=sentiment_data, nbins=20, 
                                       title="Distribution of Sentiment Scores")
-                fig_hist.update_xaxis(title="Sentiment Score")
-                fig_hist.update_yaxis(title="Frequency")
                 st.plotly_chart(fig_hist, use_container_width=True)
         
             # Time series analysis
