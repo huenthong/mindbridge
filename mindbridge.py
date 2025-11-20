@@ -29,44 +29,37 @@ class GeminiSentimentAnalyzer:
     """Uses Google Gemini AI for sophisticated sentiment analysis"""
     
     def __init__(self):
-        # Always initialize fallback first
+        # Always initialize fallback first (in case API fails)
         self._init_fallback()
-
-        # Hard-coded API key
-        self.api_key = "AIzaSyByQ2NOnxGUCS2Z1J6IOWhCYYYd9qQ1NWw"
-        self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
-        self.use_fallback = False
         
-        # Visual indicator for user
-        st.sidebar.info("🔄 Testing Gemini AI connection...")
-        
-        # Test API on startup
+        # Get API key from Streamlit secrets with better error handling
+        self.api_key = None
         try:
-            test_result = self._test_connection()
-            if test_result:
-                st.sidebar.success("✅ Gemini AI is ACTIVE!")
-                self.use_fallback = False
+            # Try different ways to access secrets
+            if hasattr(st, 'secrets'):
+                if "GEMINI_API_KEY" in st.secrets:
+                    self.api_key = st.secrets["GEMINI_API_KEY"]
+                    print(f"✅ Gemini API key found: {self.api_key[:20]}...")
+                else:
+                    print("❌ GEMINI_API_KEY not found in secrets")
+                    print(f"Available secrets: {list(st.secrets.keys())}")
             else:
-                st.sidebar.error("❌ Gemini API failed - using basic analysis")
-                self.use_fallback = True
+                print("❌ st.secrets not available")
         except Exception as e:
-            st.sidebar.error(f"❌ API Error: {str(e)[:100]}")
+            print(f"❌ Error accessing secrets: {e}")
+            self.api_key = None
+        
+        if self.api_key and len(self.api_key) > 10:
+            self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
+            self.use_fallback = False
+            print("✅ Gemini AI enabled!")
+        else:
+            st.warning("⚠️ Gemini AI unavailable. Add GEMINI_API_KEY to Streamlit secrets for smart analysis.")
             self.use_fallback = True
-    
-    def _test_connection(self):
-        """Test Gemini API connection"""
-        try:
-            data = {
-                "contents": [{"parts": [{"text": "Hello"}]}],
-                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 50}
-            }
-            response = requests.post(self.api_url, json=data, timeout=10)
-            return response.status_code == 200
-        except:
-            return False
+            print("⚠️ Using fallback analysis")
     
     def _init_fallback(self):
-        """Initialize fallback word lists"""
+        """Simple fallback analyzer if no API key"""
         self.positive_words = [
             'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 
             'happy', 'joy', 'love', 'like', 'enjoy', 'pleased', 'satisfied',
@@ -83,96 +76,71 @@ class GeminiSentimentAnalyzer:
         ]
     
     def analyze_sentiment(self, text, conversation_history=None):
-        """Analyze with Gemini AI or fallback"""
-        
+        """Analyze with Gemini AI or fallback to simple method"""
         if self.use_fallback:
             return self._simple_analysis(text)
         
         try:
-            result = self._gemini_analysis(text, conversation_history)
-            # Add success indicator
-            st.session_state.last_analysis_was_ai = True
-            return result
+            return self._gemini_analysis(text, conversation_history)
         except Exception as e:
-            st.session_state.last_analysis_was_ai = False
-            st.sidebar.warning(f"⚠️ Gemini failed: {str(e)[:50]}")
+            print(f"Gemini AI error: {e}")
             return self._simple_analysis(text)
     
     def _gemini_analysis(self, text, conversation_history=None):
-        """Use Gemini AI for analysis"""
-        
-        # Build context
+        """Use Gemini AI for sophisticated analysis"""
+        # Build context from conversation history
         context = ""
-        if conversation_history and len(conversation_history) > 1:
-            recent = conversation_history[-3:]
+        if conversation_history:
+            recent = conversation_history[-5:]  # Last 5 messages
             context = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
         
-        # Simpler, more reliable prompt
-        prompt = f"""Analyze this mental health message. Return ONLY valid JSON, no other text.
+        prompt = f"""You are a clinical mental health AI analyzer. Analyze this patient message for mental health indicators.
 
-Message: "{text}"
+{f"Previous conversation context:\n{context}\n" if context else ""}
 
+Current patient message: "{text}"
+
+Analyze and return ONLY valid JSON (no markdown, no explanation):
 {{
-  "sentiment_score": -0.6,
-  "is_sarcastic": false,
-  "true_emotion": "anxiety",
-  "depression_indicators": 1,
-  "anxiety_indicators": 2,
-  "crisis_indicators": 0,
-  "risk_level": "Medium",
-  "emotional_state": "Patient expressing anxiety symptoms",
-  "key_concerns": ["Anxiety", "Emotional distress"],
-  "confidence": 0.85
+    "sentiment_score": <float between -1.0 (very negative) and 1.0 (very positive)>,
+    "is_sarcastic": <true or false>,
+    "true_emotion": "<actual emotion if sarcastic, or 'none' if not>",
+    "depression_indicators": <integer count 0-10>,
+    "anxiety_indicators": <integer count 0-10>,
+    "crisis_indicators": <integer count 0-5>,
+    "risk_level": "<Critical or High or Medium or Low>",
+    "emotional_state": "<brief 5-10 word description>",
+    "key_concerns": ["<concern1>", "<concern2>"],
+    "confidence": <float between 0.0 and 1.0>
 }}
 
-Return JSON like above for: "{text}"
-Detect anxiety, depression, sarcasm. Use these risk levels: Critical, High, Medium, Low."""
+CRITICAL: Detect sarcasm ("I'm fine" when struggling), minimization, hidden emotions, and consider conversation context."""
 
         data = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
             "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 500
+                "temperature": 0.3,
+                "maxOutputTokens": 1024
             }
         }
         
-        response = requests.post(self.api_url, json=data, timeout=20)
-        
-        if response.status_code != 200:
-            raise Exception(f"API error {response.status_code}")
+        response = requests.post(self.api_url, json=data, timeout=30)
+        response.raise_for_status()
         
         result = response.json()
+        content = result['candidates'][0]['content']['parts'][0]['text']
         
-        # Parse response
-        try:
-            content = result['candidates'][0]['content']['parts'][0]['text']
-        except (KeyError, IndexError) as e:
-            raise Exception(f"Parse error: {e}")
+        # Clean up response
+        content = content.replace('```json', '').replace('```', '').strip()
         
-        # Clean JSON
-        content = content.strip()
-        content = content.replace('```json', '').replace('```', '')
-        content = content.strip()
+        # Extract JSON if embedded in text
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            content = json_match.group()
         
-        # Try to find JSON in the response
-        start = content.find('{')
-        end = content.rfind('}') + 1
-        if start >= 0 and end > start:
-            content = content[start:end]
-        
-        # Parse JSON
-        try:
-            analysis = json.loads(content)
-        except json.JSONDecodeError:
-            # If parsing fails, try to extract with regex
-            import re
-            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
-            if json_match:
-                analysis = json.loads(json_match.group())
-            else:
-                raise Exception("Could not parse JSON from response")
-        
-        # Add metadata
+        analysis = json.loads(content)
         analysis['analysis_timestamp'] = datetime.datetime.now().isoformat()
         analysis['ai_model'] = 'gemini-pro'
         
@@ -197,7 +165,7 @@ Detect anxiety, depression, sarcasm. Use these risk levels: Critical, High, Medi
             "anxiety_indicators": negative,
             "crisis_indicators": 0,
             "risk_level": "Medium" if negative > 2 else "Low",
-            "emotional_state": "Basic analysis mode",
+            "emotional_state": "Basic analysis mode (AI unavailable)",
             "key_concerns": [],
             "confidence": 0.5,
             "analysis_timestamp": datetime.datetime.now().isoformat(),
@@ -771,6 +739,14 @@ def show_chat_interface():
                 st.sidebar.success("✨ Powered by Gemini AI")
             elif ai_model == 'simple-fallback':
                 st.sidebar.info("ℹ️ Using basic analysis")
+            
+            # Debug info (helps troubleshoot)
+            with st.sidebar.expander("🔧 Debug Info"):
+                st.write(f"AI Model: {ai_model}")
+                st.write(f"API Key Present: {'Yes' if st.session_state.analyzer.sentiment_analyzer.api_key else 'No'}")
+                st.write(f"Using Fallback: {st.session_state.analyzer.sentiment_analyzer.use_fallback}")
+                if st.session_state.analyzer.sentiment_analyzer.api_key:
+                    st.write(f"API Key (first 20 chars): {st.session_state.analyzer.sentiment_analyzer.api_key[:20]}...")
 
 def generate_ai_response(user_input, analysis):
     """Generate contextual AI responses based on user input and analysis"""
