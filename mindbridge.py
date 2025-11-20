@@ -50,7 +50,7 @@ class GeminiSentimentAnalyzer:
             self.api_key = None
         
         if self.api_key and len(self.api_key) > 10:
-            self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
+            self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
             self.use_fallback = False
             print("✅ Gemini AI enabled!")
         else:
@@ -160,7 +160,7 @@ CRITICAL: Detect sarcasm ("I'm fine" when struggling), minimization, hidden emot
             
             analysis = json.loads(content)
             analysis['analysis_timestamp'] = datetime.datetime.now().isoformat()
-            analysis['ai_model'] = 'gemini-pro'
+            analysis['ai_model'] = 'gemini-1.5-flash'
             
             print(f"✅ Analysis complete: {analysis.get('risk_level')}")
             
@@ -759,7 +759,7 @@ def show_chat_interface():
             
             # Show AI model being used
             ai_model = analysis.get('ai_model', 'unknown')
-            if ai_model == 'gemini-pro':
+            if ai_model == 'gemini-1.5-flash':
                 st.sidebar.success("✨ Powered by Gemini AI")
             elif ai_model == 'simple-fallback':
                 st.sidebar.info("ℹ️ Using basic analysis")
