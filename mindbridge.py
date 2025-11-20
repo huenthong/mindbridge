@@ -33,7 +33,7 @@ class GeminiSentimentAnalyzer:
         self._init_fallback()
 
         # Hard-coded API key
-        self.api_key = "AIzaSyAhcAb3Y2l5zhuE97L45yRmJP9q9lOhQgw"
+        self.api_key = "AIzaSyByQ2NOnxGUCS2Z1J6IOWhCYYYd9qQ1NWw"
         self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
         self.use_fallback = False
         
