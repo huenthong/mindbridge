@@ -667,48 +667,48 @@ def show_chat_interface():
                 st.markdown(f'<div class="chat-message bot-message"><strong>AI Assistant:</strong> {message["content"]}</div>', unsafe_allow_html=True)
     
     # Chat input
-    # Initialize text input in session state
-    if "message_input" not in st.session_state:
-        st.session_state.message_input = ""
+    # Chat input form (forms auto-clear on submit!)
+    with st.form(key="chat_form", clear_on_submit=True):
+        user_input = st.text_area("Type your message here...", height=100, key="message_input")
+        
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            send_button = st.form_submit_button("📤 Send Message")
+        with col2:
+            # Clear chat button outside form since it does different action
+            pass
     
-    # Use session state without key to allow proper clearing
-    user_input = st.text_area("Type your message here...", 
-                              value=st.session_state.message_input, 
-                              height=100)
+    # Handle send button
+    if send_button:
+        if user_input.strip():
+            # Add user message
+            st.session_state.chat_messages.append({"role": "user", "content": user_input})
+            
+            # Pass conversation history for AI context
+            conversation_history = [
+                {"role": msg["role"], "content": msg["content"]} 
+                for msg in st.session_state.chat_messages
+            ]
+            
+            # Analyze message with AI
+            analysis = st.session_state.analyzer.analyze_text(user_input, conversation_history)
+            
+            # Generate AI response
+            ai_response = generate_ai_response(user_input, analysis)
+            st.session_state.chat_messages.append({"role": "assistant", "content": ai_response})
+            
+            # Save session data
+            session_data = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "messages": st.session_state.chat_messages,
+                "analysis": analysis
+            }
+            st.session_state.emr_db.add_session_record(st.session_state.current_patient, session_data)
+            
+            st.rerun()
     
+    # Clear chat button (outside the form)
     col1, col2, col3 = st.columns([1, 1, 2])
-    with col1:
-        if st.button("📤 Send Message"):
-            if user_input.strip():
-                # Add user message
-                st.session_state.chat_messages.append({"role": "user", "content": user_input})
-                
-                # Pass conversation history for AI context
-                conversation_history = [
-                    {"role": msg["role"], "content": msg["content"]} 
-                    for msg in st.session_state.chat_messages
-                ]
-                
-                # Analyze message with AI
-                analysis = st.session_state.analyzer.analyze_text(user_input, conversation_history)
-                
-                # Generate AI response
-                ai_response = generate_ai_response(user_input, analysis)
-                st.session_state.chat_messages.append({"role": "assistant", "content": ai_response})
-                
-                # Save session data
-                session_data = {
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "messages": st.session_state.chat_messages,
-                    "analysis": analysis
-                }
-                st.session_state.emr_db.add_session_record(st.session_state.current_patient, session_data)
-                
-                # Clear the message input
-                st.session_state.message_input = ""
-                
-                st.rerun()
-    
     with col2:
         if st.button("🔄 Clear Chat"):
             st.session_state.chat_messages = [
@@ -1117,7 +1117,7 @@ def show_analytics_dashboard():
             col1, col2 = st.columns(2)
             with col1:
                 fig_scatter = px.scatter(indicators_df, x='depression_indicators', y='anxiety_indicators',
-                                       color='risk_level', size='sentiment', 
+                                       color='risk_level',
                                        title="Depression vs Anxiety Indicators")
                 st.plotly_chart(fig_scatter, use_container_width=True)
             
