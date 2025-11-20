@@ -52,7 +52,7 @@ class GeminiSentimentAnalyzer:
         if self.api_key and len(self.api_key) > 10:
             self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
             self.use_fallback = False
-            print("✅ Gemini AI enabled!")
+            print("✅ Gemini AI enabled with model: gemini-1.5-flash")
         else:
             st.warning("⚠️ Gemini AI unavailable. Add GEMINI_API_KEY to Streamlit secrets for smart analysis.")
             self.use_fallback = True
