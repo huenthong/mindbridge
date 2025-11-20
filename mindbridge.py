@@ -1105,6 +1105,8 @@ def show_analytics_dashboard():
                 sessions_df = pd.DataFrame(all_sessions)
                 sessions_df['date'] = pd.to_datetime(sessions_df['date'])
                 daily_sentiment = sessions_df.groupby('date')['sentiment'].mean().reset_index()
+            
+                fig_line = px.line(daily_sentiment, x='date', y='sentiment',
                                  title="Average Daily Sentiment Score")
                 st.plotly_chart(fig_line, use_container_width=True)
         
