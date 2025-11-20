@@ -37,15 +37,36 @@ class GeminiSentimentAnalyzer:
         self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
         self.use_fallback = False
         
-        print("=" * 60)
-        print("🔧 INITIALIZING GEMINI AI")
-        print(f"API Key (first 20): {self.api_key[:20]}...")
-        print(f"API URL: {self.api_url[:80]}...")
-        print(f"use_fallback: {self.use_fallback}")
-        print("=" * 60)
+        # Visual indicator for user
+        st.sidebar.info("🔄 Testing Gemini AI connection...")
+        
+        # Test API on startup
+        try:
+            test_result = self._test_connection()
+            if test_result:
+                st.sidebar.success("✅ Gemini AI is ACTIVE!")
+                self.use_fallback = False
+            else:
+                st.sidebar.error("❌ Gemini API failed - using basic analysis")
+                self.use_fallback = True
+        except Exception as e:
+            st.sidebar.error(f"❌ API Error: {str(e)[:100]}")
+            self.use_fallback = True
+    
+    def _test_connection(self):
+        """Test Gemini API connection"""
+        try:
+            data = {
+                "contents": [{"parts": [{"text": "Hello"}]}],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 50}
+            }
+            response = requests.post(self.api_url, json=data, timeout=10)
+            return response.status_code == 200
+        except:
+            return False
     
     def _init_fallback(self):
-        """Simple fallback analyzer"""
+        """Initialize fallback word lists"""
         self.positive_words = [
             'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 
             'happy', 'joy', 'love', 'like', 'enjoy', 'pleased', 'satisfied',
@@ -64,87 +85,101 @@ class GeminiSentimentAnalyzer:
     def analyze_sentiment(self, text, conversation_history=None):
         """Analyze with Gemini AI or fallback"""
         
-        print("\n" + "=" * 60)
-        print(f"📝 ANALYZING: '{text[:50]}...'")
-        print(f"🔧 use_fallback = {self.use_fallback}")
-        
         if self.use_fallback:
-            print("⚠️ Using BASIC ANALYSIS")
-            result = self._simple_analysis(text)
-            print(f"✅ Basic result: {result['risk_level']}")
-            return result
+            return self._simple_analysis(text)
         
-        print("🤖 Attempting GEMINI AI...")
         try:
             result = self._gemini_analysis(text, conversation_history)
-            print(f"✅ Gemini result: {result['risk_level']}, Model: {result.get('ai_model')}")
+            # Add success indicator
+            st.session_state.last_analysis_was_ai = True
             return result
         except Exception as e:
-            print(f"❌ GEMINI FAILED: {str(e)[:200]}")
-            print("⚠️ Falling back to basic analysis")
-            result = self._simple_analysis(text)
-            return result
+            st.session_state.last_analysis_was_ai = False
+            st.sidebar.warning(f"⚠️ Gemini failed: {str(e)[:50]}")
+            return self._simple_analysis(text)
     
     def _gemini_analysis(self, text, conversation_history=None):
-        """Use Gemini AI"""
+        """Use Gemini AI for analysis"""
+        
+        # Build context
         context = ""
-        if conversation_history:
-            recent = conversation_history[-5:]
+        if conversation_history and len(conversation_history) > 1:
+            recent = conversation_history[-3:]
             context = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
         
-        prompt = f"""You are a clinical mental health AI analyzer. Analyze this patient message.
+        # Simpler, more reliable prompt
+        prompt = f"""Analyze this mental health message. Return ONLY valid JSON, no other text.
 
-{f"Previous conversation:\n{context}\n" if context else ""}
+Message: "{text}"
 
-Current message: "{text}"
-
-Return ONLY valid JSON:
 {{
-    "sentiment_score": <-1.0 to 1.0>,
-    "is_sarcastic": <true/false>,
-    "true_emotion": "<emotion>",
-    "depression_indicators": <0-10>,
-    "anxiety_indicators": <0-10>,
-    "crisis_indicators": <0-5>,
-    "risk_level": "<Critical/High/Medium/Low>",
-    "emotional_state": "<brief description>",
-    "key_concerns": [<list>],
-    "confidence": <0.0-1.0>
+  "sentiment_score": -0.6,
+  "is_sarcastic": false,
+  "true_emotion": "anxiety",
+  "depression_indicators": 1,
+  "anxiety_indicators": 2,
+  "crisis_indicators": 0,
+  "risk_level": "Medium",
+  "emotional_state": "Patient expressing anxiety symptoms",
+  "key_concerns": ["Anxiety", "Emotional distress"],
+  "confidence": 0.85
 }}
 
-Detect sarcasm, minimization, hidden emotions."""
+Return JSON like above for: "{text}"
+Detect anxiety, depression, sarcasm. Use these risk levels: Critical, High, Medium, Low."""
 
         data = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024}
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 500
+            }
         }
         
-        print(f"📡 Calling: {self.api_url[:60]}...")
-        response = requests.post(self.api_url, json=data, timeout=30)
-        print(f"📡 Status: {response.status_code}")
+        response = requests.post(self.api_url, json=data, timeout=20)
         
         if response.status_code != 200:
-            print(f"❌ Error response: {response.text[:500]}")
-            raise Exception(f"API returned {response.status_code}")
+            raise Exception(f"API error {response.status_code}")
         
         result = response.json()
-        content = result['candidates'][0]['content']['parts'][0]['text']
-        print(f"📡 Received: {content[:150]}...")
         
-        # Clean and parse
-        content = content.replace('```json', '').replace('```', '').strip()
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            content = json_match.group()
+        # Parse response
+        try:
+            content = result['candidates'][0]['content']['parts'][0]['text']
+        except (KeyError, IndexError) as e:
+            raise Exception(f"Parse error: {e}")
         
-        analysis = json.loads(content)
+        # Clean JSON
+        content = content.strip()
+        content = content.replace('```json', '').replace('```', '')
+        content = content.strip()
+        
+        # Try to find JSON in the response
+        start = content.find('{')
+        end = content.rfind('}') + 1
+        if start >= 0 and end > start:
+            content = content[start:end]
+        
+        # Parse JSON
+        try:
+            analysis = json.loads(content)
+        except json.JSONDecodeError:
+            # If parsing fails, try to extract with regex
+            import re
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+            if json_match:
+                analysis = json.loads(json_match.group())
+            else:
+                raise Exception("Could not parse JSON from response")
+        
+        # Add metadata
         analysis['analysis_timestamp'] = datetime.datetime.now().isoformat()
         analysis['ai_model'] = 'gemini-pro'
         
         return analysis
     
     def _simple_analysis(self, text):
-        """Fallback"""
+        """Fallback simple analysis"""
         words = text.lower().split()
         positive = sum(1 for w in words if w.strip('.,!?') in self.positive_words)
         negative = sum(1 for w in words if w.strip('.,!?') in self.negative_words)
