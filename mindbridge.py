@@ -81,20 +81,25 @@ class GeminiSentimentAnalyzer:
             return self._simple_analysis(text)
         
         try:
-            return self._gemini_analysis(text, conversation_history)
+            result = self._gemini_analysis(text, conversation_history)
+            st.sidebar.success("✅ Gemini AI worked!")
+            return result
         except Exception as e:
-            print(f"Gemini AI error: {e}")
+            error_msg = str(e)
+            print(f"❌ GEMINI ERROR: {error_msg}")
+            st.sidebar.error(f"🚨 Gemini Failed: {error_msg[:200]}")
             return self._simple_analysis(text)
     
     def _gemini_analysis(self, text, conversation_history=None):
         """Use Gemini AI for sophisticated analysis"""
-        # Build context from conversation history
-        context = ""
-        if conversation_history:
-            recent = conversation_history[-5:]  # Last 5 messages
-            context = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
-        
-        prompt = f"""You are a clinical mental health AI analyzer. Analyze this patient message for mental health indicators.
+        try:
+            # Build context from conversation history
+            context = ""
+            if conversation_history:
+                recent = conversation_history[-5:]  # Last 5 messages
+                context = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
+            
+            prompt = f"""You are a clinical mental health AI analyzer. Analyze this patient message for mental health indicators.
 
 {f"Previous conversation context:\n{context}\n" if context else ""}
 
@@ -116,35 +121,54 @@ Analyze and return ONLY valid JSON (no markdown, no explanation):
 
 CRITICAL: Detect sarcasm ("I'm fine" when struggling), minimization, hidden emotions, and consider conversation context."""
 
-        data = {
-            "contents": [{
-                "parts": [{"text": prompt}]
-            }],
-            "generationConfig": {
-                "temperature": 0.3,
-                "maxOutputTokens": 1024
+            data = {
+                "contents": [{
+                    "parts": [{"text": prompt}]
+                }],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    "maxOutputTokens": 1024
+                }
             }
-        }
-        
-        response = requests.post(self.api_url, json=data, timeout=30)
-        response.raise_for_status()
-        
-        result = response.json()
-        content = result['candidates'][0]['content']['parts'][0]['text']
-        
-        # Clean up response
-        content = content.replace('```json', '').replace('```', '').strip()
-        
-        # Extract JSON if embedded in text
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            content = json_match.group()
-        
-        analysis = json.loads(content)
-        analysis['analysis_timestamp'] = datetime.datetime.now().isoformat()
-        analysis['ai_model'] = 'gemini-pro'
-        
-        return analysis
+            
+            print(f"📡 Calling Gemini API: {self.api_url[:60]}...")
+            response = requests.post(self.api_url, json=data, timeout=30)
+            print(f"📡 Response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_detail = response.text[:500]
+                print(f"❌ API Error Response: {error_detail}")
+                raise Exception(f"API returned {response.status_code}: {error_detail}")
+            
+            response.raise_for_status()
+            
+            result = response.json()
+            print(f"📡 Got JSON response")
+            
+            content = result['candidates'][0]['content']['parts'][0]['text']
+            print(f"📡 Raw content: {content[:200]}...")
+            
+            # Clean up response
+            content = content.replace('```json', '').replace('```', '').strip()
+            
+            # Extract JSON if embedded in text
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                content = json_match.group()
+            
+            print(f"📡 Cleaned content: {content[:200]}...")
+            
+            analysis = json.loads(content)
+            analysis['analysis_timestamp'] = datetime.datetime.now().isoformat()
+            analysis['ai_model'] = 'gemini-pro'
+            
+            print(f"✅ Analysis complete: {analysis.get('risk_level')}")
+            
+            return analysis
+            
+        except Exception as e:
+            print(f"❌ Exception in _gemini_analysis: {type(e).__name__}: {str(e)}")
+            raise
     
     def _simple_analysis(self, text):
         """Fallback simple analysis"""
