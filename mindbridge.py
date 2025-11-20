@@ -1085,7 +1085,7 @@ def show_analytics_dashboard():
                 # Sentiment distribution
                 st.subheader("😊 Sentiment Score Distribution")
                 sentiment_data = [s['sentiment'] for s in all_sessions]
-                fig_hist = px.histogram(x=sentiment_data, nbins=20, 
+                fig_hist = px.histogram(sentiment_data, nbins=20, 
                                       title="Distribution of Sentiment Scores")
                 fig_hist.update_xaxis(title="Sentiment Score")
                 fig_hist.update_yaxis(title="Frequency")
