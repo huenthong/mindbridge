@@ -441,17 +441,23 @@ def main():
         100% { opacity: 1; }
     }
     .chat-message {
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border-radius: 10px;
+        padding: 1.2rem;
+        margin: 0.8rem 0;
+        border-radius: 15px;
+        line-height: 1.6;
+        font-size: 1.05rem;
     }
     .user-message {
-        background-color: #e3f2fd;
-        margin-left: 2rem;
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        margin-left: 3rem;
+        border: 1px solid #90caf9;
+        box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);
     }
     .bot-message {
-        background-color: #f5f5f5;
-        margin-right: 2rem;
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        margin-right: 3rem;
+        border: 1px solid #ce93d8;
+        box-shadow: 0 2px 8px rgba(156, 39, 176, 0.1);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -648,28 +654,40 @@ def show_patient_profile():
             st.info("No previous mental health records found.")
 
 def show_chat_interface():
-    st.title("💬 Mental Health Support Chat")
-    st.write("Hi! I'm your AI mental health assistant. I'm here to listen and provide support.")
+    st.title("💭 Safe Space for Your Thoughts")
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                padding: 20px; border-radius: 15px; color: white; margin-bottom: 20px;'>
+        <h3 style='margin: 0; color: white;'>🤍 You're Not Alone</h3>
+        <p style='margin: 5px 0 0 0; opacity: 0.9;'>
+            This is a safe, judgment-free space. Take your time, and share whatever feels right. 
+            I'm here to listen and support you, one step at a time.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Initialize chat history
+    # Initialize chat history with a warmer greeting
     if 'chat_messages' not in st.session_state:
         st.session_state.chat_messages = [
-            {"role": "assistant", "content": "Hello! I'm here to support you today. How are you feeling right now?"}
+            {"role": "assistant", "content": "Hi there 💙 I'm so glad you're here. This is your space to share whatever's on your mind, at your own pace. There's no pressure - just know that I'm here to listen and support you. How are you feeling today?"}
         ]
     
-    # Display chat history
+    # Display chat history with softer styling
     chat_container = st.container()
     with chat_container:
         for message in st.session_state.chat_messages:
             if message["role"] == "user":
                 st.markdown(f'<div class="chat-message user-message"><strong>You:</strong> {message["content"]}</div>', unsafe_allow_html=True)
             else:
-                st.markdown(f'<div class="chat-message bot-message"><strong>AI Assistant:</strong> {message["content"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="chat-message bot-message">💙 {message["content"]}</div>', unsafe_allow_html=True)
     
     # Chat input
     # Chat input form (forms auto-clear on submit!)
     with st.form(key="chat_form", clear_on_submit=True):
-        user_input = st.text_area("Type your message here...", height=100, key="message_input")
+        user_input = st.text_area("Share what's on your mind... 💭", 
+                                  placeholder="Take your time. There's no rush, and no judgment here. Share whatever feels right for you today.",
+                                  height=120, 
+                                  key="message_input")
         
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
@@ -790,79 +808,85 @@ def generate_ai_response(user_input, analysis):
     
     # Crisis response
     if risk_level == "Critical":
-        return """I'm very concerned about what you've shared. Your safety is the most important thing right now. 
-        
-Please consider:
-- Calling emergency services (999) if you're in immediate danger
-- Contacting the Befrienders helpline: 03-76272929
-- Going to your nearest hospital emergency department
-- Reaching out to a trusted friend or family member
+        return """I hear you, and I'm really concerned about what you're going through right now. Your life matters, and you deserve support and care. 💙
 
-You don't have to go through this alone. Professional help is available and can make a real difference."""
+I know things might feel overwhelming, but please know that you don't have to face this alone. There are people who want to help:
+
+🆘 **If you're in immediate danger:**
+• Emergency services: **999** (available 24/7)
+• Go to your nearest hospital emergency department
+
+💚 **Someone to talk to right now:**
+• **Befrienders Malaysia: 03-7627 2929** (24/7, free, confidential)
+• You can also reach out to a trusted friend or family member
+
+I care about your wellbeing, and I want you to get the support you deserve. Will you reach out to one of these resources? You're worth it."""
 
     # High risk response
     elif risk_level == "High":
         responses = [
-            "Thank you for sharing that with me. What you're experiencing sounds really challenging, and I want you to know that your feelings are valid.",
-            "I can hear that you're going through a difficult time. It takes courage to talk about these feelings.",
-            "It sounds like you're dealing with a lot right now. These feelings can be overwhelming, but there are ways to work through them."
+            "Thank you for trusting me with what you're feeling. I can hear that you're really struggling right now, and that takes courage to share.",
+            "I'm really glad you're here and talking about this. What you're experiencing sounds incredibly difficult.",
+            "Your feelings are completely valid, and I want you to know that you're not alone in this."
         ]
         base_response = random.choice(responses)
         return f"""{base_response}
-        
-I'd strongly recommend speaking with a mental health professional who can provide the support you deserve. In the meantime, here are some things that might help:
-- Take things one day at a time
-- Reach out to trusted friends or family
-- Consider calling a helpline if you need someone to talk to
-- Try some gentle self-care activities
 
-Would you like to talk more about what's been troubling you?"""
+💜 **What might help right now:**
+• Talking to a mental health professional can make a real difference - they're trained to help with exactly what you're going through
+• The Befrienders helpline (03-7627 2929) offers 24/7 support if you need someone to talk to
+• Small acts of self-care - a warm shower, your favorite comfort food, or calling someone you trust
+• Remember: these heavy feelings won't last forever, even though they feel overwhelming right now
+
+Would you like to talk more about what's been weighing on you? I'm here to listen, without judgment. 💙"""
 
     # Medium risk response
     elif risk_level == "Medium":
         if sentiment < -0.2:
-            return """I can sense that you're not feeling your best right now. It's completely normal to have ups and downs, and I'm glad you're reaching out.
-            
-Some things that might help:
-- Taking a few deep breaths
-- Going for a short walk if possible
-- Talking to someone you trust
-- Doing something small that usually brings you comfort
+            return """I can hear that things feel heavy right now. It's completely okay to not be okay - we all have these moments, and reaching out like you're doing takes real strength. 💙
 
-What do you think might help you feel a bit better today?"""
+**Some gentle suggestions that might help:**
+• Take a few slow, deep breaths (in through your nose, out through your mouth)
+• Step outside for some fresh air, even just for a few minutes
+• Talk to someone who makes you feel safe and understood
+• Do something small that usually brings you comfort - maybe a cup of tea, your favorite music, or a cozy blanket
+
+Remember, you don't have to tackle everything at once. Just this moment, just this breath.
+
+What do you think would feel helpful right now? I'm here to listen. 🌸"""
         else:
-            return """Thank you for sharing that with me. I'm here to listen and support you through whatever you're experiencing.
-            
-It can be helpful to:
-- Acknowledge your feelings without judgment
-- Think about what has helped you in similar situations before
-- Consider reaching out to friends, family, or a counselor
-- Remember that difficult feelings are temporary
+            return """Thank you for opening up and sharing this with me. I'm here to listen and support you through whatever you're experiencing, at your own pace. 💜
 
-Is there anything specific you'd like to talk about or explore?"""
+**Things that might be helpful to explore:**
+• Acknowledge what you're feeling, without judging yourself for it - all feelings are valid
+• Think about times you've felt this way before and what helped then
+• Consider talking with a friend, family member, or counselor you trust
+• Remember that difficult feelings are visitors - they don't stay forever
+
+Is there anything specific that's been on your mind that you'd like to talk through together?"""
 
     # Low risk/neutral response
     else:
         if sentiment > 0.1:
-            return """I'm glad to hear you're doing relatively well! It's great that you're checking in on your mental health.
-            
-Maintaining good mental health is an ongoing process. Some things that can help:
-- Regular exercise and good sleep
-- Staying connected with people you care about
-- Practicing mindfulness or relaxation techniques
-- Engaging in activities you enjoy
+            return """It's wonderful to hear you're doing okay! 💚 Taking time to check in on your mental health shows real self-awareness and care for yourself.
 
-Is there anything specific about your wellbeing you'd like to discuss?"""
+**Ways to keep nurturing your wellbeing:**
+• Move your body in ways that feel good - dancing, walking, stretching
+• Stay connected with people who lift you up
+• Try mindfulness, meditation, or just quiet moments to yourself
+• Make time for things that bring you joy
+
+Even on good days, it's great to talk things through. Is there anything on your mind you'd like to explore? 🌟"""
         else:
-            return """Thank you for sharing with me. I'm here to support you and listen to whatever you'd like to talk about.
-            
-Sometimes it helps to:
-- Talk through what's on your mind
-- Identify what you're feeling and why
-- Think about small steps that might help
-- Remember that it's okay to not be okay sometimes
+            return """Thank you for being here and sharing with me. Whatever you're feeling right now is okay - there's no pressure, no judgment, just a safe space to talk. 💙
 
-What would be most helpful for you to discuss right now?"""
+**Sometimes it helps to:**
+• Put words to what's sitting in your heart or mind
+• Explore what you're feeling and where it might be coming from
+• Think about small, gentle steps that might bring some ease
+• Remember that it's perfectly okay to have mixed feelings or uncertain days
+
+What would feel most supportive for you to talk about right now? I'm here, and I'm listening. 🌸"""
 
 def show_patient_reports():
     st.title("📊 My Mental Health Reports")
