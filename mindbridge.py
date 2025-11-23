@@ -357,7 +357,7 @@ class MentalHealthAnalyzer:
         
         # Add emotional state
         if emotional_state and "Basic analysis" not in emotional_state:
-            recommendations["additional_notes"].append(f"😔 Emotional state: {emotional_state}")
+            recommendations["additional_notes"].append(f"Emotional state: {emotional_state}")
         
         # Risk-based recommendations
         if risk_level == "Critical":
