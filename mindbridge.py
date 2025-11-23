@@ -1,7 +1,7 @@
 import streamlit as st
 # Set page config FIRST before any other Streamlit commands
 st.set_page_config(
-    page_title="🧠 MindBridge - AI Mental Health Platform",
+    page_title="MindBridge - AI Mental Health Platform",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -1283,16 +1283,40 @@ def show_doctor_reports():
 
                 # Doctor notes section
                 st.subheader("📝 Clinical Notes")
-                doctor_notes = st.text_area(f"Add clinical notes for session {i+1}:", 
-                                          key=f"notes_{selected_patient}_{i}", height=100)
+                
+                # Initialize session state for this session's notes if it doesn't exist
+                notes_key = f"doctor_notes_{selected_patient}_{i}"
+                if notes_key not in st.session_state:
+                    # Load existing notes from session data if they exist
+                    st.session_state[notes_key] = session.get('doctor_notes', '')
+                
+                # Display existing saved notes if any
+                if session.get('doctor_notes'):
+                    st.info(f"**Saved Notes:** {session.get('doctor_notes')}")
+                
+                doctor_notes = st.text_area(f"Add/Edit clinical notes for session {i+1}:", 
+                                          value=st.session_state[notes_key],
+                                          key=f"notes_input_{selected_patient}_{i}", 
+                                          height=100)
                 
                 if st.button(f"💾 Save Notes for Session {i+1}", key=f"save_{selected_patient}_{i}"):
-                    # In a real system, this would save to database
-                    st.success("Clinical notes saved successfully!")
+                    # Save notes to the session data in EMR
+                    if selected_patient in st.session_state.emr_db.patients:
+                        if 'chat_sessions' in st.session_state.emr_db.patients[selected_patient]:
+                            st.session_state.emr_db.patients[selected_patient]['chat_sessions'][i]['doctor_notes'] = doctor_notes
+                            st.session_state[notes_key] = doctor_notes
+                            st.success("✅ Clinical notes saved successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Error: Session not found")
+                    else:
+                        st.error("Error: Patient not found")
                 
                 # Generate comprehensive report
                 if st.button(f"📄 Generate Full Report for Session {i+1}", key=f"report_{selected_patient}_{i}"):
-                    full_report = generate_comprehensive_report(session, patient_data, doctor_notes)
+                    # Use saved doctor notes if they exist, otherwise use current input
+                    report_notes = session.get('doctor_notes', doctor_notes)
+                    full_report = generate_comprehensive_report(session, patient_data, report_notes)
                     st.download_button(
                         label="📥 Download Comprehensive Report",
                         data=full_report,
