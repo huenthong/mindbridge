@@ -1,7 +1,7 @@
 import streamlit as st
 # Set page config FIRST before any other Streamlit commands
 st.set_page_config(
-    page_title="🧠 MindBridge - AI Mental Health Platform",
+    page_title="MindBridge - AI Mental Health Platform",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
